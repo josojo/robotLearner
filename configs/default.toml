@@ -1,0 +1,14 @@
+[runtime]
+artifact_dir = "artifacts"
+database_path = "artifacts/robot_learner.db"
+dry_run = true
+
+[safety]
+authorized_task_ids = ["demo_pick_and_place"]
+allow_untrusted_strategies = false
+max_velocity_m_s = 0.10
+max_force_n = 10.0
+max_duration_s = 30.0
+workspace_min_m = [-0.50, -0.50, 0.00]
+workspace_max_m = [0.50, 0.50, 0.75]
+
