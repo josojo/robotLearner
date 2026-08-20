@@ -42,6 +42,44 @@ safety validation.
 The demo writes JSON traces beneath `artifacts/traces/`. Its robot connection is
 explicitly a dry run; no hardware commands are issued.
 
+## MuJoCo cable-tie simulation
+
+The sibling `../robo-wiki/cableTies` project is installed as the registered
+Gymnasium environment `CableTie-v0`. Robot Learner starts it in an isolated worker;
+live MuJoCo objects never cross the process boundary.
+
+Fetch the git-ignored PiPER meshes in the sibling checkout before first use, following
+`../robo-wiki/labTesting/scripts/fetch_piper_assets.sh`. The configured mesh directory
+is passed explicitly through `configs/cableties.toml`.
+
+Inspect the available cameras, sensors, and named skills:
+
+```bash
+uv run robot-learner simulation-info --simulation-config configs/cableties.toml
+```
+
+Restricted scripts may call only `sim.observe(...)`, `sim.run_skill(...)`, and
+`sim.stop()`. Execute one or more checkpoint sections in order:
+
+```bash
+uv run robot-learner simulate --simulation-config configs/cableties.toml \
+  --section scene_ready=examples/scene_ready.py \
+  --section target_identified=examples/target_identified.py
+```
+
+For the common one-skill checkpoint case, Robot Learner can create the restricted
+camera-before/action/camera-after script itself before execution:
+
+```bash
+uv run robot-learner simulate --simulation-config configs/cableties.toml \
+  --checkpoint scene_ready=settle \
+  --checkpoint target_identified=identify_tie
+```
+
+The worker continuously captures the configured MuJoCo cameras while skills run and
+writes scripts, frames, the capability manifest, and results below
+`artifacts/simulation-runs/`.
+
 ## Create checkpoints from a prompt
 
 With `OPENROUTER_API_KEY` configured, start a task with a natural-language prompt:

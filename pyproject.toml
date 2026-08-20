@@ -7,9 +7,16 @@ requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Robot Learner contributors" }]
 dependencies = [
+  "cableties-sim",
+  "gymnasium>=1.2,<2",
+  "mujoco==3.8.0",
   "openrouter>=1.0,<2",
+  "pillow>=10",
   "python-dotenv>=1,<2",
 ]
+
+[tool.uv.sources]
+cableties-sim = { git = "https://github.com/josojo/robo-wiki.git", rev = "7f6f8fe", subdirectory = "cableTies" }
 
 [project.scripts]
 robot-learner = "robot_learner.cli:main"
@@ -44,4 +51,3 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 python_version = "3.11"
 strict = true
 files = ["src", "tests"]
-
