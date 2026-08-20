@@ -938,12 +938,16 @@ name = "robot-learner"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "openrouter" },
+    { name = "python-dotenv" },
+]
+
+[package.optional-dependencies]
+simulation = [
     { name = "cableties-sim" },
     { name = "gymnasium" },
     { name = "mujoco" },
-    { name = "openrouter" },
     { name = "pillow" },
-    { name = "python-dotenv" },
 ]
 
 [package.dev-dependencies]
@@ -955,13 +959,14 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cableties-sim", git = "https://github.com/josojo/robo-wiki.git?subdirectory=cableTies&rev=7f6f8fe" },
-    { name = "gymnasium", specifier = ">=1.2,<2" },
-    { name = "mujoco", specifier = "==3.8.0" },
+    { name = "cableties-sim", marker = "extra == 'simulation'", git = "https://github.com/josojo/robo-wiki.git?subdirectory=cableTies&rev=7f6f8fe" },
+    { name = "gymnasium", marker = "extra == 'simulation'", specifier = ">=1.2,<2" },
+    { name = "mujoco", marker = "extra == 'simulation'", specifier = "==3.8.0" },
     { name = "openrouter", specifier = ">=1.0,<2" },
-    { name = "pillow", specifier = ">=10" },
+    { name = "pillow", marker = "extra == 'simulation'", specifier = ">=10" },
     { name = "python-dotenv", specifier = ">=1,<2" },
 ]
+provides-extras = ["simulation"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -55,6 +55,7 @@ is passed explicitly through `configs/cableties.toml`.
 Inspect the available cameras, sensors, and named skills:
 
 ```bash
+uv sync --extra simulation --dev
 uv run robot-learner simulation-info --simulation-config configs/cableties.toml
 ```
 

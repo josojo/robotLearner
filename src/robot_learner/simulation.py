@@ -237,8 +237,8 @@ def _worker_main(connection: Connection, raw_spec: dict[str, Any], artifact_dir:
         os.environ["MUJOCO_GL"] = spec.render_backend
         for module in spec.registration_modules:
             importlib.import_module(module)
-        import gymnasium as gym
-        from PIL import Image
+        import gymnasium as gym  # type: ignore[import-not-found]
+        from PIL import Image  # type: ignore[import-not-found]
 
         kwargs = dict(spec.env_kwargs)
         kwargs.update(width=spec.frame_width, height=spec.frame_height)

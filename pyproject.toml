@@ -7,12 +7,16 @@ requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Robot Learner contributors" }]
 dependencies = [
+  "openrouter>=1.0,<2",
+  "python-dotenv>=1,<2",
+]
+
+[project.optional-dependencies]
+simulation = [
   "cableties-sim",
   "gymnasium>=1.2,<2",
   "mujoco==3.8.0",
-  "openrouter>=1.0,<2",
   "pillow>=10",
-  "python-dotenv>=1,<2",
 ]
 
 [tool.uv.sources]

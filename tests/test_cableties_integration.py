@@ -1,9 +1,10 @@
 from pathlib import Path
 from typing import Any, cast
 
-import cableties_sim  # noqa: F401
-import gymnasium as gym
 import pytest
+
+cableties_sim = pytest.importorskip("cableties_sim")
+gym = pytest.importorskip("gymnasium")
 
 PIPER_ASSETS = Path(__file__).parents[2] / "robo-wiki/labTesting/assets/piper/assets"
 
