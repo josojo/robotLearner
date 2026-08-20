@@ -31,6 +31,9 @@ export OPENROUTER_API_KEY="sk-or-v1-..."
 export OPENROUTER_MODEL="openai/gpt-4o-mini"  # optional
 ```
 
+Alternatively, copy `.env.example` to `.env` and load it into your shell or process
+manager. The application does not automatically load `.env` files.
+
 Then attach it with `OpenRouterLanguageModel.from_env()` and call
 `harness.consult_model(...)`. Responses are advisory only: model text is never sent
 directly to hardware and must still be converted to the restricted action DSL and pass
