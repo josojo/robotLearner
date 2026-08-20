@@ -1,7 +1,11 @@
 import json
+import os
+from pathlib import Path
 
 import pytest
+from pytest import MonkeyPatch
 
+from robot_learner.models import Task
 from robot_learner.planning import CheckpointPlanner, PlanError, task_to_dict
 
 
@@ -44,3 +48,47 @@ def test_planner_rejects_forward_dependencies() -> None:
     }]}))
     with pytest.raises(PlanError, match="unknown or forward dependencies"):
         CheckpointPlanner(model).create_task("Pick up the object")
+
+
+def test_start_loads_api_key_from_dotenv(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    from robot_learner import cli
+
+    (tmp_path / ".env").write_text("OPENROUTER_API_KEY=from-dotenv\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+
+    class StubPlanner:
+        def __init__(self, model: object) -> None:
+            assert model is not None
+
+        def create_task(self, prompt: str) -> Task:
+            assert os.environ["OPENROUTER_API_KEY"] == "from-dotenv"
+            return CheckpointPlanner(StubLanguageModel(json.dumps({
+                "checkpoints": [{
+                    "id": "scene_seen",
+                    "name": "Scene seen",
+                    "success_predicate": {"name": "scene_visible"},
+                }]
+            }))).create_task(prompt)
+
+    monkeypatch.setattr(cli, "CheckpointPlanner", StubPlanner)
+    config = tmp_path / "config.toml"
+    config.write_text(
+        """[runtime]
+artifact_dir = "artifacts"
+database_path = "artifacts/test.db"
+dry_run = true
+
+[safety]
+authorized_task_ids = []
+allow_untrusted_strategies = false
+max_velocity_m_s = 0.1
+max_force_n = 10.0
+max_duration_s = 30.0
+workspace_min_m = [-0.5, -0.5, 0.0]
+workspace_max_m = [0.5, 0.5, 0.75]
+""",
+        encoding="utf-8",
+    )
+
+    assert cli.create_plan("Observe the scene", config, tmp_path / "plan.json") == 0

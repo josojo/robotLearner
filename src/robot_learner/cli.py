@@ -4,6 +4,8 @@ import argparse
 import json
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from robot_learner.config import load_settings
 from robot_learner.executor import DryRunRobot
 from robot_learner.harness import LearningHarness
@@ -40,6 +42,7 @@ def run_demo(config_path: Path) -> int:
 
 
 def create_plan(prompt: str, config_path: Path, output: Path | None = None) -> int:
+    load_dotenv(Path.cwd() / ".env")
     settings = load_settings(config_path)
     task = CheckpointPlanner(OpenRouterLanguageModel.from_env()).create_task(prompt)
     destination = output or settings.artifact_dir / "plans" / f"{task.id}.json"
@@ -74,4 +77,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

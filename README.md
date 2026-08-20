@@ -31,8 +31,8 @@ export OPENROUTER_API_KEY="sk-or-v1-..."
 export OPENROUTER_MODEL="openai/gpt-4o-mini"  # optional
 ```
 
-Alternatively, copy `.env.example` to `.env` and load it into your shell or process
-manager. The application does not automatically load `.env` files.
+Alternatively, copy `.env.example` to `.env`. The `start` command loads that file
+automatically without overriding variables already exported by your shell.
 
 Then attach it with `OpenRouterLanguageModel.from_env()` and call
 `harness.consult_model(...)`. Responses are advisory only: model text is never sent
@@ -74,4 +74,3 @@ The default configuration rejects untrusted strategies, requires explicit task
 authorization, limits motion speed/force/duration, and stops on lost observations.
 Configuration is a deployment convenience, not a substitute for certified robot-side
 safety controls. Review limits and implement physical interlocks before real use.
-
