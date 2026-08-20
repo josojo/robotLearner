@@ -9,6 +9,15 @@ from robot_learner.tracing import JsonTraceRecorder
 from robot_learner.verification import ContextPredicateVerifier
 
 
+class StubLanguageModel:
+    def __init__(self) -> None:
+        self.request: tuple[str, str | None] | None = None
+
+    def complete(self, prompt: str, *, system_prompt: str | None = None) -> str:
+        self.request = (prompt, system_prompt)
+        return "inspect the scene"
+
+
 def test_checkpoint_runs_and_records_trace(tmp_path: Path) -> None:
     contract = _settings(tmp_path).safety_contract
     checkpoint = Checkpoint("seen", "Scene seen", Predicate("visible"))
@@ -38,6 +47,23 @@ def test_checkpoint_runs_and_records_trace(tmp_path: Path) -> None:
 
     assert trace.verification.outcome is Outcome.SUCCESS
     assert (tmp_path / "traces" / f"{trace.id}.json").exists()
+
+
+def test_harness_consults_configured_language_model(tmp_path: Path) -> None:
+    model = StubLanguageModel()
+    settings = _settings(tmp_path)
+    harness = LearningHarness(
+        DryRunRobot(),
+        SafetyValidator(settings),
+        ContextPredicateVerifier(),
+        JsonTraceRecorder(settings.artifact_dir),
+        model,
+    )
+
+    response = harness.consult_model("What should happen next?", system_prompt="Be cautious")
+
+    assert response == "inspect the scene"
+    assert model.request == ("What should happen next?", "Be cautious")
 
 
 def _settings(path: Path) -> Settings:

@@ -6,8 +6,8 @@ action vocabulary, checks it against explicit limits, executes it through a robo
 adapter, verifies the result, and preserves an immutable trace.
 
 This scaffold implements the Phase 1/MVP seam from `SPECIFICATION.md`. It deliberately
-does not connect to real hardware or call an LMM. Those capabilities plug into typed
-protocols, while the included CLI uses a deterministic dry-run adapter.
+does not connect to real hardware. Model deliberation is available through OpenRouter,
+while the included CLI uses a deterministic dry-run adapter.
 
 ## Getting started
 
@@ -20,6 +20,21 @@ uv run pytest
 uv run ruff check .
 uv run mypy
 ```
+
+## OpenRouter
+
+The harness accepts an `OpenRouterLanguageModel` through its optional `language_model`
+dependency. Configure the official OpenRouter SDK with environment variables:
+
+```bash
+export OPENROUTER_API_KEY="sk-or-v1-..."
+export OPENROUTER_MODEL="openai/gpt-4o-mini"  # optional
+```
+
+Then attach it with `OpenRouterLanguageModel.from_env()` and call
+`harness.consult_model(...)`. Responses are advisory only: model text is never sent
+directly to hardware and must still be converted to the restricted action DSL and pass
+safety validation.
 
 The demo writes JSON traces beneath `artifacts/traces/`. Its robot connection is
 explicitly a dry run; no hardware commands are issued.
