@@ -27,6 +27,12 @@ class Verifier(Protocol):
     def evaluate(self, checkpoint: Checkpoint, trace: ExecutionTrace) -> VerificationResult: ...
 
 
+class LanguageModel(Protocol):
+    """A narrow text-generation boundary used by the orchestration harness."""
+
+    def complete(self, prompt: str, *, system_prompt: str | None = None) -> str: ...
+
+
 class StrategyRepository(Protocol):
     def candidates(self, checkpoint_id: str, observation: Observation) -> Sequence[Strategy]: ...
 

@@ -13,7 +13,7 @@ from robot_learner.models import (
     new_id,
     utc_now,
 )
-from robot_learner.ports import RobotAdapter, Verifier
+from robot_learner.ports import LanguageModel, RobotAdapter, Verifier
 from robot_learner.safety import SafetyValidator
 from robot_learner.tracing import JsonTraceRecorder
 
@@ -25,11 +25,23 @@ class LearningHarness:
         safety: SafetyValidator,
         verifier: Verifier,
         recorder: JsonTraceRecorder,
+        language_model: LanguageModel | None = None,
     ) -> None:
         self._adapter = adapter
         self._safety = safety
         self._verifier = verifier
         self._recorder = recorder
+        self._language_model = language_model
+
+    def consult_model(self, prompt: str, *, system_prompt: str | None = None) -> str:
+        """Send a deliberation request through the configured model provider.
+
+        Model output remains advisory: callers must translate it into the typed action DSL and
+        pass it through the normal safety validation path before execution.
+        """
+        if self._language_model is None:
+            raise RuntimeError("no language model is configured")
+        return self._language_model.complete(prompt, system_prompt=system_prompt)
 
     def run_checkpoint(
         self,
