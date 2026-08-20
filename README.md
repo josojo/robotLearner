@@ -42,6 +42,18 @@ safety validation.
 The demo writes JSON traces beneath `artifacts/traces/`. Its robot connection is
 explicitly a dry run; no hardware commands are issued.
 
+## Create checkpoints from a prompt
+
+With `OPENROUTER_API_KEY` configured, start a task with a natural-language prompt:
+
+```bash
+uv run robot-learner start "Pick up the red block and place it in the blue bin"
+```
+
+The planner asks the model for small, independently verifiable achieved states,
+validates checkpoint IDs and dependency order, and writes the resulting task beneath
+`artifacts/plans/`. Planning does not execute model output or send commands to a robot.
+
 ## Architecture
 
 - `models`: immutable task, checkpoint, strategy, action, safety, and trace schemas.
