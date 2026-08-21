@@ -88,6 +88,7 @@ def fake_worker_main(connection: Connection, raw_spec: dict[str, Any], artifact_
                 "manifest": {
                     "provider": "fake",
                     "environment_id": raw_spec.get("env_id", "Fake-v0"),
+                    "seed": raw_spec.get("seed"),
                     "cameras": ["work", "wrist"],
                     "skills": {
                         "settle": {"parameters": {}},

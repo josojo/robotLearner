@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -261,6 +262,7 @@ def run_explore(
     plan_path: Path,
     output: Path | None,
     *,
+    seed: int | None = None,
     language_model: LanguageModel | None = None,
     worker: Callable[..., None] | None = None,
 ) -> int:
@@ -268,6 +270,8 @@ def run_explore(
 
     load_dotenv(Path.cwd() / ".env")
     spec = SimulationSpec.from_toml(simulation_config)
+    if seed is not None:
+        spec = replace(spec, seed=seed)
     task = load_plan(plan_path)
     run_dir = output or Path("artifacts") / "simulation-runs" / new_id("explore")
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -280,6 +284,7 @@ def run_explore(
             json.dumps(simulation.manifest, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
+        print(f"Seed: {spec.seed}")
         report = SimulationExplorer(simulation, model).explore(task)
         for item in report.checkpoints:
             if item.ok:
@@ -384,6 +389,11 @@ def main() -> int:
         "--simulation-config", type=Path, default=Path("configs/cableties.toml")
     )
     explore.add_argument("--plan", type=Path, required=True, help="task JSON from `start`")
+    explore.add_argument(
+        "--seed",
+        type=int,
+        help="override simulation.seed from the config (tie layout / scene sample)",
+    )
     explore.add_argument("--output", type=Path, help="simulation artifact directory")
     review = subparsers.add_parser(
         "review",
@@ -439,7 +449,9 @@ def main() -> int:
             parser.error(str(exc))
     if args.command == "explore":
         try:
-            return run_explore(args.simulation_config, args.plan, args.output)
+            return run_explore(
+                args.simulation_config, args.plan, args.output, seed=args.seed
+            )
         except sim_errors as exc:
             parser.error(str(exc))
     if args.command == "review":

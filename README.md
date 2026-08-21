@@ -111,10 +111,14 @@ wrapper does not request image generation.
 export OPENROUTER_API_KEY="sk-or-v1-..."
 uv run robot-learner explore --simulation-config configs/cableties.toml \
   --plan examples/cabletie_plan.json
+uv run robot-learner explore --simulation-config configs/cableties.toml \
+  --plan examples/cabletie_plan.json --seed 11
 ```
 
 `--plan` is the JSON written by `start` (or the bundled cable-tie example).
 Each LLM call may return only one `sim.run_skill` from the host catalog.
+`--seed` overrides `simulation.seed` in the TOML (default `7`) so the tie
+layout is resampled.
 
 ## Rewatch a simulation run
 

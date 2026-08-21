@@ -255,12 +255,22 @@ max_script_revisions = 2
     model = ScriptedLanguageModel(['sim.run_skill("settle")\n'])
 
     assert (
-        run_explore(config, plan, output, language_model=model, worker=fake_worker_main) == 0
+        run_explore(
+            config,
+            plan,
+            output,
+            seed=11,
+            language_model=model,
+            worker=fake_worker_main,
+        )
+        == 0
     )
     assert (output / "scripts" / "scene_ready" / "v1.py").is_file()
     saved = json.loads((output / "explore.json").read_text(encoding="utf-8"))
     assert saved["ok"] is True
     assert saved["checkpoints"][0]["skill"] == "settle"
+    manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["seed"] == 11
 
 
 def test_task_from_dict_round_trips() -> None:
