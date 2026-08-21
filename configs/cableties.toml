@@ -8,7 +8,7 @@ cameras = ["work", "closeup", "overview", "wrist"]
 frame_width = 480
 frame_height = 360
 capture_stride = 40
-render_backend = "osmesa"
+render_backend = "auto"
 
 [simulation.env_kwargs]
 piper_asset_dir = "../robo-wiki/labTesting/assets/piper/assets"

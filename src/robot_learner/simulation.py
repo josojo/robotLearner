@@ -8,6 +8,7 @@ import importlib
 import json
 import multiprocessing as mp
 import os
+import sys
 import time
 import tomllib
 from collections.abc import Callable
@@ -46,7 +47,7 @@ class SimulationSpec:
     frame_width: int = 480
     frame_height: int = 360
     capture_stride: int = 40
-    render_backend: str = "osmesa"
+    render_backend: str = "auto"
     env_kwargs: dict[str, Any] = field(default_factory=dict)
     config_dir: Path | None = None
 
@@ -85,7 +86,7 @@ class SimulationSpec:
             frame_width=int(data.get("frame_width", 480)),
             frame_height=int(data.get("frame_height", 360)),
             capture_stride=int(data.get("capture_stride", 40)),
-            render_backend=str(data.get("render_backend", "osmesa")),
+            render_backend=str(data.get("render_backend", "auto")),
             env_kwargs=resolved,
             config_dir=path.parent.resolve(),
         )
@@ -93,6 +94,7 @@ class SimulationSpec:
             raise ValueError("worker timeout and capture stride must be positive")
         if spec.frame_width <= 0 or spec.frame_height <= 0:
             raise ValueError("frame dimensions must be positive")
+        resolve_render_backend(spec.render_backend)
         return spec
 
 
@@ -412,6 +414,34 @@ class SimulationClient:
         return response
 
 
+def resolve_render_backend(requested: str, *, platform: str | None = None) -> str | None:
+    """Pick a MUJOCO_GL value. None means leave the variable unset.
+
+    `osmesa` is Linux-only. macOS/Windows wheels ship GLFW, so `auto` does
+    not set MUJOCO_GL and MuJoCo uses its native default.
+    """
+    name = requested.strip().lower()
+    system = (platform or sys.platform).lower()
+    linux = system.startswith("linux")
+    if name in ("", "auto"):
+        return "osmesa" if linux else None
+    if name == "osmesa" and not linux:
+        raise ValueError(
+            "render_backend=osmesa is not available on this platform "
+            f"({system}). Use auto or glfw."
+        )
+    return name
+
+
+def apply_render_backend(requested: str, *, platform: str | None = None) -> str | None:
+    value = resolve_render_backend(requested, platform=platform)
+    if value is None:
+        os.environ.pop("MUJOCO_GL", None)
+    else:
+        os.environ["MUJOCO_GL"] = value
+    return value
+
+
 def _spec_from_worker_payload(raw_spec: dict[str, Any]) -> SimulationSpec:
     data = dict(raw_spec)
     data.pop("config_dir", None)
@@ -425,7 +455,7 @@ def _worker_main(connection: Connection, raw_spec: dict[str, Any], artifact_dir:
     host: Any = None
     try:
         spec = _spec_from_worker_payload(raw_spec)
-        os.environ["MUJOCO_GL"] = spec.render_backend
+        apply_render_backend(spec.render_backend)
         module_name, _, class_name = spec.host.partition(":")
         host_cls = getattr(importlib.import_module(module_name), class_name)
         from PIL import Image

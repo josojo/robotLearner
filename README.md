@@ -54,6 +54,8 @@ Fetch the git-ignored PiPER meshes in the sibling checkout before first use,
 following `../robo-wiki/labTesting/scripts/fetch_piper_assets.sh`. Point
 `piper_asset_dir` at `.../piper/assets` (with `piper.xml` as a sibling).
 Paths in `configs/cableties.toml` are resolved relative to that file.
+`render_backend = "auto"` uses OSMesa on Linux and MuJoCo's native GLFW
+default on macOS. Do not set `osmesa` on Mac — that backend is Linux-only.
 
 Inspect the host:
 

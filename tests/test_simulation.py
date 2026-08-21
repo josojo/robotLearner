@@ -10,6 +10,7 @@ from robot_learner.simulation import (
     SimulationSpec,
     checkpoint_id_for,
     parse_restricted_script,
+    resolve_render_backend,
     script_from_actions,
 )
 from robot_learner.simulation_testing import fake_worker_main
@@ -40,6 +41,15 @@ piper_asset_dir = "meshes/piper/assets"
     assert spec.capture_stride == 20
     assert spec.env_kwargs["control_repeat"] == 2
     assert spec.env_kwargs["piper_asset_dir"] == str(tmp_path / "meshes/piper/assets")
+    assert spec.render_backend == "auto"
+
+
+def test_auto_render_backend_is_osmesa_only_on_linux() -> None:
+    assert resolve_render_backend("auto", platform="linux") == "osmesa"
+    assert resolve_render_backend("auto", platform="darwin") is None
+    assert resolve_render_backend("glfw", platform="darwin") == "glfw"
+    with pytest.raises(ValueError, match="osmesa is not available"):
+        resolve_render_backend("osmesa", platform="darwin")
 
 
 def test_restricted_script_parses_approved_calls() -> None:
