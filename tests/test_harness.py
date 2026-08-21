@@ -13,7 +13,13 @@ class StubLanguageModel:
     def __init__(self) -> None:
         self.request: tuple[str, str | None] | None = None
 
-    def complete(self, prompt: str, *, system_prompt: str | None = None) -> str:
+    def complete(
+        self,
+        prompt: str,
+        *,
+        system_prompt: str | None = None,
+        images: object = None,
+    ) -> str:
         self.request = (prompt, system_prompt)
         return "inspect the scene"
 

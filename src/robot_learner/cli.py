@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -12,10 +13,12 @@ from dotenv import load_dotenv
 
 from robot_learner.config import load_settings
 from robot_learner.executor import DryRunRobot
+from robot_learner.explore import ExplorationError, SimulationExplorer
 from robot_learner.harness import LearningHarness
 from robot_learner.models import Action, ActionKind, Checkpoint, Predicate, Strategy, Task
 from robot_learner.openrouter import OpenRouterLanguageModel
-from robot_learner.planning import CheckpointPlanner, PlanError, task_to_dict
+from robot_learner.planning import CheckpointPlanner, PlanError, task_from_dict, task_to_dict
+from robot_learner.ports import LanguageModel
 from robot_learner.safety import SafetyValidator
 from robot_learner.simulation import (
     GeneratedScript,
@@ -241,6 +244,57 @@ def _script_failed(result: dict[str, Any]) -> bool:
     return any(not row.get("ok", True) for row in result.get("results", []))
 
 
+def load_plan(path: Path) -> Task:
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise PlanError(f"plan is not valid JSON: {exc.msg}") from exc
+    if not isinstance(raw, dict):
+        raise PlanError("plan must be a JSON object")
+    return task_from_dict(raw)
+
+
+def run_explore(
+    simulation_config: Path,
+    plan_path: Path,
+    output: Path | None,
+    *,
+    language_model: LanguageModel | None = None,
+    worker: Callable[..., None] | None = None,
+) -> int:
+    from robot_learner.models import new_id
+
+    load_dotenv(Path.cwd() / ".env")
+    spec = SimulationSpec.from_toml(simulation_config)
+    task = load_plan(plan_path)
+    run_dir = output or Path("artifacts") / "simulation-runs" / new_id("explore")
+    run_dir.mkdir(parents=True, exist_ok=True)
+    model = language_model or OpenRouterLanguageModel.from_env()
+    report = None
+    simulation: SimulationClient | None = None
+    try:
+        simulation = SimulationClient(spec, run_dir, worker=worker)
+        (run_dir / "manifest.json").write_text(
+            json.dumps(simulation.manifest, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        report = SimulationExplorer(simulation, model).explore(task)
+        for item in report.checkpoints:
+            status = "PASS" if item.ok else "FAIL"
+            detail = f" ({item.skill})" if item.skill else ""
+            print(f"{item.checkpoint_id}: {status}{detail}")
+        return 0 if report.ok else 1
+    finally:
+        if simulation is not None:
+            simulation.close()
+        if report is not None:
+            (run_dir / "explore.json").write_text(
+                json.dumps(report.to_dict(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+        print(f"Run: {run_dir}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="robot-learner")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -283,6 +337,15 @@ def main() -> int:
         help="explore CHECKPOINT_ID=SKILL and persist the compiled script",
     )
     simulate.add_argument("--output", type=Path, help="simulation artifact directory")
+    explore = subparsers.add_parser(
+        "explore",
+        help="walk a checkpoint plan and persist one restricted script per checkpoint",
+    )
+    explore.add_argument(
+        "--simulation-config", type=Path, default=Path("configs/cableties.toml")
+    )
+    explore.add_argument("--plan", type=Path, required=True, help="task JSON from `start`")
+    explore.add_argument("--output", type=Path, help="simulation artifact directory")
     args = parser.parse_args()
     if args.command == "demo":
         return run_demo(args.config)
@@ -297,6 +360,8 @@ def main() -> int:
         RuntimeError,
         SimulationError,
         ScriptValidationError,
+        ExplorationError,
+        PlanError,
         EOFError,
     )
     if args.command == "simulation-info":
@@ -307,6 +372,11 @@ def main() -> int:
     if args.command == "simulate":
         try:
             return run_simulation(args.simulation_config, sys.argv[1:], args.output)
+        except sim_errors as exc:
+            parser.error(str(exc))
+    if args.command == "explore":
+        try:
+            return run_explore(args.simulation_config, args.plan, args.output)
         except sim_errors as exc:
             parser.error(str(exc))
     return 2

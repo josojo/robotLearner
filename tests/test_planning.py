@@ -6,7 +6,7 @@ import pytest
 from pytest import MonkeyPatch
 
 from robot_learner.models import Task
-from robot_learner.planning import CheckpointPlanner, PlanError, task_to_dict
+from robot_learner.planning import CheckpointPlanner, PlanError, task_from_dict, task_to_dict
 
 
 class StubLanguageModel:
@@ -14,7 +14,13 @@ class StubLanguageModel:
         self.response = response
         self.request: tuple[str, str | None] | None = None
 
-    def complete(self, prompt: str, *, system_prompt: str | None = None) -> str:
+    def complete(
+        self,
+        prompt: str,
+        *,
+        system_prompt: str | None = None,
+        images: object = None,
+    ) -> str:
         self.request = (prompt, system_prompt)
         return self.response
 
@@ -36,6 +42,7 @@ def test_planner_creates_ordered_checkpoints_from_initial_prompt() -> None:
         "object_found", "object_grasped"]
     assert task.checkpoints[1].dependencies == ("object_found",)
     assert '"minimum_confidence": 0.9' in json.dumps(task_to_dict(task))
+    assert task_from_dict(task_to_dict(task)).checkpoints[1].id == "object_grasped"
     assert model.request is not None
     assert "independently verifiable" in (model.request[1] or "")
 
