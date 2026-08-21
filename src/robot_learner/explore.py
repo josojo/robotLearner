@@ -42,6 +42,7 @@ Rules:
 - Arguments must be JSON literals (strings, numbers, booleans, lists, objects, null).
 - Do not call sim.observe, sim.stop, or any other name.
 - Do not import, assign, loop, comment, or write prose.
+- Do not wrap the call in markdown fences (no ```, no plaintext, no python).
 - Do not emit raw joint or Cartesian motion; skills are the only legal actions.
 """
 
@@ -289,14 +290,25 @@ def observation_image_paths(observation: Observation) -> tuple[str, ...]:
     return tuple(paths)
 
 
+_FENCE = re.compile(r"^```[^\n]*\n(?P<body>.*?)\n?```\s*$", re.DOTALL)
+_SIM_LINE = re.compile(r"^sim\.(?:run_skill|observe|stop)\s*\(")
+
+
 def extract_restricted_script(text: str) -> str:
     """Strip markdown fences so parse_restricted_script can see the calls."""
     candidate = text.strip()
     if not candidate:
         raise ScriptValidationError("model returned an empty script")
-    if candidate.startswith("```"):
-        candidate = re.sub(r"^```(?:python|py)?\s*", "", candidate, count=1)
-        candidate = re.sub(r"\s*```$", "", candidate, count=1)
+    fenced = _FENCE.match(candidate)
+    if fenced:
+        candidate = fenced.group("body").strip()
+    elif candidate.startswith("```"):
+        candidate = re.sub(r"^```[^\n]*\n?", "", candidate, count=1)
+        candidate = re.sub(r"\n?```\s*$", "", candidate)
+        candidate = candidate.strip()
+    sim_lines = [line.strip() for line in candidate.splitlines() if _SIM_LINE.match(line.strip())]
+    if sim_lines:
+        return "\n".join(sim_lines) + "\n"
     return candidate.strip() + "\n"
 
 
@@ -434,7 +446,8 @@ def _user_prompt(
     if attempts:
         last = attempts[-1]
         sections.append(
-            "Previous attempt failed. Restore already happened; pick a different skill.\n"
+            "Previous attempt failed. Restore already happened. "
+            "Reply with one bare sim.run_skill(...) line and no markdown fences.\n"
             + json.dumps(
                 {
                     "revision": last.revision,

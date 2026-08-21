@@ -90,10 +90,27 @@ def test_observation_image_paths_skips_non_images(tmp_path: Path) -> None:
     assert observation_image_paths(observation) == (str(png),)
 
 
-def test_extract_restricted_script_strips_markdown_fence() -> None:
-    source = extract_restricted_script("```python\nsim.run_skill(\"settle\")\n```")
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "```python\nsim.run_skill(\"settle\")\n```",
+        "```plaintext\nsim.run_skill(\"settle\")\n```",
+        "```\nsim.run_skill(\"settle\")\n```",
+        "The next action is:\nsim.run_skill(\"settle\")\n",
+    ],
+)
+def test_extract_restricted_script_strips_markdown_fence(raw: str) -> None:
+    source = extract_restricted_script(raw)
     commands = parse_restricted_script(source)
     assert commands[0].arguments["name"] == "settle"
+
+
+def test_explorer_accepts_plaintext_fenced_skill(tmp_path: Path) -> None:
+    model = ScriptedLanguageModel(['```plaintext\nsim.run_skill("settle")\n```'])
+    with SimulationClient(_spec(), tmp_path, worker=fake_worker_main) as client:
+        report = SimulationExplorer(client, model).explore(_task("scene_ready"))
+    assert report.ok is True
+    assert report.checkpoints[0].skill == "settle"
 
 
 def test_explorer_persists_observe_skill_observe_script(tmp_path: Path) -> None:
