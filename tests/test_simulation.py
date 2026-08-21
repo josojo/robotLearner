@@ -17,6 +17,8 @@ from robot_learner.simulation_testing import fake_worker_main
 
 
 def test_simulation_spec_resolves_piper_path_against_config(tmp_path: Path) -> None:
+    meshes = tmp_path / "meshes" / "piper" / "assets"
+    meshes.mkdir(parents=True)
     path = tmp_path / "simulation.toml"
     path.write_text(
         """
@@ -40,8 +42,52 @@ piper_asset_dir = "meshes/piper/assets"
     assert spec.cameras == ("work", "wrist")
     assert spec.capture_stride == 20
     assert spec.env_kwargs["control_repeat"] == 2
-    assert spec.env_kwargs["piper_asset_dir"] == str(tmp_path / "meshes/piper/assets")
+    assert spec.env_kwargs["piper_asset_dir"] == str(meshes)
     assert spec.render_backend == "auto"
+
+
+def test_simulation_spec_resolves_sibling_robo_wiki_from_configs_dir(tmp_path: Path) -> None:
+    project = tmp_path / "robotLearner"
+    meshes = tmp_path / "robo-wiki" / "labTesting" / "assets" / "piper" / "assets"
+    meshes.mkdir(parents=True)
+    config = project / "configs" / "cableties.toml"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        """
+[simulation]
+env_id = "CableTie-v0"
+host = "cableties_sim:CableTieHost"
+
+[simulation.env_kwargs]
+piper_asset_dir = "../robo-wiki/labTesting/assets/piper/assets"
+""",
+        encoding="utf-8",
+    )
+
+    spec = SimulationSpec.from_toml(config)
+
+    assert spec.env_kwargs["piper_asset_dir"] == str(meshes)
+
+
+def test_simulation_spec_lists_tried_piper_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    path = tmp_path / "simulation.toml"
+    path.write_text(
+        """
+[simulation]
+env_id = "CableTie-v0"
+host = "cableties_sim:CableTieHost"
+
+[simulation.env_kwargs]
+piper_asset_dir = "../robo-wiki/labTesting/assets/piper/assets"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Tried:"):
+        SimulationSpec.from_toml(path)
 
 
 def test_auto_render_backend_is_osmesa_only_on_linux() -> None:

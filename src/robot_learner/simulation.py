@@ -73,9 +73,7 @@ class SimulationSpec:
         resolved = dict(kwargs)
         asset = resolved.get("piper_asset_dir")
         if isinstance(asset, str) and asset:
-            raw_path = Path(asset).expanduser()
-            if not raw_path.is_absolute():
-                resolved["piper_asset_dir"] = str((path.parent / raw_path).resolve())
+            resolved["piper_asset_dir"] = resolve_piper_asset_dir(asset, path)
         spec = cls(
             env_id=env_id,
             host=host,
@@ -412,6 +410,44 @@ class SimulationClient:
         if not isinstance(response, dict):
             raise SimulationError("simulation worker returned an invalid response")
         return response
+
+
+def resolve_piper_asset_dir(raw: str, config_path: Path) -> str:
+    """Find `.../piper/assets` without assuming the process CWD.
+
+    `../robo-wiki/...` in `configs/*.toml` means a sibling of the project, not
+    of the `configs/` directory. We try the config dir, the project root, CWD,
+    and `CABLETIES_PIPER_ASSET_DIR`.
+    """
+    expanded = Path(raw).expanduser()
+    config_dir = config_path.parent.resolve()
+    candidates: list[Path] = []
+    env = os.environ.get("CABLETIES_PIPER_ASSET_DIR")
+    if env:
+        candidates.append(Path(env).expanduser().resolve())
+    if expanded.is_absolute():
+        candidates.append(expanded.resolve())
+    else:
+        candidates.extend(
+            [
+                (config_dir / expanded).resolve(),
+                (config_dir.parent / expanded).resolve(),
+                (Path.cwd() / expanded).resolve(),
+            ]
+        )
+    tried: list[Path] = []
+    for candidate in candidates:
+        if candidate in tried:
+            continue
+        tried.append(candidate)
+        if candidate.is_dir():
+            return str(candidate)
+    listing = "\n".join(f"  - {path}" for path in tried)
+    raise ValueError(
+        f"PiPER asset directory does not exist: {raw}\nTried:\n{listing}\n"
+        "Expected .../piper/assets with sibling piper.xml, or set "
+        "CABLETIES_PIPER_ASSET_DIR."
+    )
 
 
 def resolve_render_backend(requested: str, *, platform: str | None = None) -> str | None:
