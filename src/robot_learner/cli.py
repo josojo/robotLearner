@@ -282,9 +282,16 @@ def run_explore(
         )
         report = SimulationExplorer(simulation, model).explore(task)
         for item in report.checkpoints:
-            status = "PASS" if item.ok else "FAIL"
-            detail = f" ({item.skill})" if item.skill else ""
-            print(f"{item.checkpoint_id}: {status}{detail}")
+            if item.ok:
+                print(f"{item.checkpoint_id}: PASS ({item.skill})")
+                continue
+            detail = item.error or "no successful skill"
+            print(f"{item.checkpoint_id}: FAIL ({detail})")
+            for attempt in item.attempts:
+                mark = "ok" if attempt.ok else "fail"
+                skill = attempt.skill or "unparsed"
+                error = f" -> {attempt.error}" if attempt.error else ""
+                print(f"  attempt {attempt.revision} {mark}: {skill}{error}")
         return 0 if report.ok else 1
     finally:
         if simulation is not None:
@@ -295,6 +302,7 @@ def run_explore(
                 encoding="utf-8",
             )
         _print_review(run_dir)
+        print(f"Details: {run_dir / 'explore.json'}")
         print(f"Run: {run_dir}")
 
 

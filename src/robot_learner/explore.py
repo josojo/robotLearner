@@ -57,6 +57,8 @@ class CheckpointAttempt:
     ok: bool
     error: str | None = None
     phase: JSONValue = None
+    skill: str | None = None
+    state: JSONValue = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +70,7 @@ class CheckpointExploration:
     attempts: tuple[CheckpointAttempt, ...]
     start_frame: int | None = None
     end_frame: int | None = None
+    error: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,6 +93,7 @@ class ExplorationReport:
                     "script_path": item.script_path,
                     "start_frame": item.start_frame,
                     "end_frame": item.end_frame,
+                    "error": item.error,
                     "attempts": [
                         {
                             "revision": attempt.revision,
@@ -97,6 +101,8 @@ class ExplorationReport:
                             "ok": attempt.ok,
                             "error": attempt.error,
                             "phase": attempt.phase,
+                            "skill": attempt.skill,
+                            "state": attempt.state,
                         }
                         for attempt in item.attempts
                     ],
@@ -170,6 +176,7 @@ class SimulationExplorer:
                         ok=False,
                         error=str(exc),
                         phase=before.context.get("phase"),
+                        state=_compact_state(before),
                     )
                 )
                 continue
@@ -187,6 +194,8 @@ class SimulationExplorer:
                         ok=False,
                         error=str(exc),
                         phase=before.context.get("phase"),
+                        skill=str(command.arguments["name"]),
+                        state=_compact_state(before),
                     )
                 )
                 continue
@@ -207,6 +216,8 @@ class SimulationExplorer:
                         source=source,
                         ok=True,
                         phase=after.context.get("phase"),
+                        skill=str(command.arguments["name"]),
+                        state=_compact_state(after),
                     )
                 )
                 return CheckpointExploration(
@@ -227,16 +238,21 @@ class SimulationExplorer:
                     ok=False,
                     error=failure,
                     phase=after.context.get("phase"),
+                    skill=str(command.arguments["name"]),
+                    state=_compact_state(after),
                 )
             )
+        last = attempts[-1] if attempts else None
+        last_skill = next((item.skill for item in reversed(attempts) if item.skill), None)
         return CheckpointExploration(
             checkpoint_id=checkpoint.id,
             ok=False,
-            skill=None,
+            skill=last_skill,
             script_path=None,
             attempts=tuple(attempts),
             start_frame=start_frame,
             end_frame=end_frame,
+            error=last.error if last else "no skill attempts",
         )
 
 
@@ -327,14 +343,51 @@ def _command_source(command: ScriptCommand) -> str:
 
 
 def _failure_reason(result: dict[str, JSONValue], after: Observation) -> str | None:
-    if not result.get("ok"):
-        error = result.get("error")
-        if isinstance(error, str) and error.strip():
-            return error.strip()
-        return "skill failed"
-    if after.context.get("unstable"):
-        return "scene became unstable"
-    return None
+    if result.get("ok") and not after.context.get("unstable"):
+        return None
+    parts: list[str] = []
+    name = result.get("name")
+    if isinstance(name, str) and name:
+        parts.append(name)
+    error = result.get("error")
+    if isinstance(error, str) and error.strip():
+        parts.append(error.strip())
+    elif not result.get("ok"):
+        parts.append("skill returned ok=false")
+    if after.context.get("unstable") or result.get("unstable"):
+        parts.append("scene unstable")
+    state = _compact_state(after)
+    for key in ("phase", "held_tie", "current_tie", "tie_z"):
+        value = state.get(key)
+        if value is not None:
+            parts.append(f"{key}={value}")
+    return "; ".join(parts) if parts else "skill failed"
+
+
+def _compact_state(observation: Observation) -> dict[str, JSONValue]:
+    privileged = observation.context.get("privileged")
+    if not isinstance(privileged, dict):
+        privileged = {}
+    current = privileged.get("current_tie")
+    tie_z: JSONValue = None
+    ties = privileged.get("ties")
+    if isinstance(current, int) and isinstance(ties, list):
+        for item in ties:
+            if isinstance(item, dict) and item.get("index") == current:
+                z_value = item.get("z")
+                if isinstance(z_value, (int, float)):
+                    tie_z = float(z_value)
+                break
+    return {
+        "phase": observation.context.get("phase"),
+        "unstable": observation.context.get("unstable"),
+        "held_tie": privileged.get("held_tie"),
+        "current_tie": current,
+        "tie_z": tie_z,
+        "tcp": privileged.get("tcp"),
+        "holder_locked": privileged.get("holder_locked"),
+        "candidate_ties": privileged.get("candidate_ties"),
+    }
 
 
 def _user_prompt(

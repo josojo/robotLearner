@@ -33,6 +33,15 @@ def test_write_review_builds_html_player(tmp_path: Path) -> None:
                         "skill": "settle",
                         "ok": True,
                         "start_frame": 0,
+                        "error": None,
+                        "attempts": [
+                            {
+                                "revision": 1,
+                                "skill": "settle",
+                                "ok": True,
+                                "error": None,
+                            }
+                        ],
                     }
                 ]
             }

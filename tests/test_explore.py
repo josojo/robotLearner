@@ -166,6 +166,11 @@ def test_explorer_stops_after_max_script_revisions(tmp_path: Path) -> None:
     assert report.ok is False
     assert len(report.checkpoints) == 1
     assert len(report.checkpoints[0].attempts) == 2
+    assert report.checkpoints[0].skill == "fail"
+    assert report.checkpoints[0].error is not None
+    assert "fail" in (report.checkpoints[0].error or "")
+    assert "skill failed" in (report.checkpoints[0].error or "")
+    assert report.checkpoints[0].attempts[0].state is not None
     assert not (tmp_path / "scripts" / "scene_ready").exists()
     assert model.responses == []
 

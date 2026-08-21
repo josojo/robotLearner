@@ -147,7 +147,10 @@ def _checkpoints(run_dir: Path) -> list[dict[str, Any]]:
                 "id": item["checkpoint_id"],
                 "skill": item.get("skill"),
                 "ok": bool(item.get("ok")),
+                "error": item.get("error"),
                 "frame": item.get("start_frame"),
+                "end_frame": item.get("end_frame"),
+                "attempts": item.get("attempts") or [],
             }
         )
     return checkpoints
@@ -306,10 +309,14 @@ button, select { background: #2a2a2a; color: #eee; border: 1px solid #555;
   border-radius: 4px; padding: 6px 10px; cursor: pointer; }
 button:hover { background: #333; }
 input[type=range] { flex: 1; min-width: 160px; }
-.marks { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 16px; }
+.marks { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 12px; }
 .marks button { font-size: 12px; }
 .marks .fail { border-color: #a44; color: #f88; }
 .marks .pass { border-color: #4a6; }
+.log { margin: 0 16px 16px; padding: 10px 12px; background: #1a1a1a;
+  border: 1px solid #333; border-radius: 6px; white-space: pre-wrap;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; color: #ddd; }
+.log:empty { display: none; }
 </style>
 </head>
 <body>
@@ -332,6 +339,7 @@ input[type=range] { flex: 1; min-width: 160px; }
   </select>
 </div>
 <div class="marks" id="marks"></div>
+<pre class="log" id="log"></pre>
 <script>
 const DATA = %%DATA%%;
 const images = {};
@@ -392,6 +400,23 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "ArrowRight") { stop(); show(index + 1); }
 });
 const marks = document.getElementById("marks");
+const log = document.getElementById("log");
+function describe(cp) {
+  const lines = [cp.id + (cp.ok ? " PASS" : " FAIL")];
+  if (cp.skill) lines.push("skill: " + cp.skill);
+  if (cp.error) lines.push("error: " + cp.error);
+  (cp.attempts || []).forEach((attempt) => {
+    const mark = attempt.ok ? "ok" : "fail";
+    const skill = attempt.skill || "unparsed";
+    const err = attempt.error ? " -> " + attempt.error : "";
+    let state = "";
+    if (attempt.state) {
+      state = "  state=" + JSON.stringify(attempt.state);
+    }
+    lines.push("  attempt " + attempt.revision + " " + mark + ": " + skill + err + state);
+  });
+  return lines.join("\\n");
+}
 (DATA.checkpoints || []).forEach((cp) => {
   const button = document.createElement("button");
   button.type = "button";
@@ -399,13 +424,17 @@ const marks = document.getElementById("marks");
   button.textContent = cp.id + (cp.skill ? " · " + cp.skill : "") + (cp.ok ? "" : " FAIL");
   button.addEventListener("click", () => {
     stop();
-    if (typeof cp.frame === "number") {
-      const pos = DATA.frames.findIndex((f) => f.i === cp.frame);
+    const target = (typeof cp.end_frame === "number") ? cp.end_frame : cp.frame;
+    if (typeof target === "number") {
+      const pos = DATA.frames.findIndex((f) => f.i === target);
       show(pos >= 0 ? pos : 0);
     }
+    log.textContent = describe(cp);
   });
   marks.appendChild(button);
 });
+const failed = (DATA.checkpoints || []).filter((cp) => !cp.ok);
+if (failed.length) log.textContent = failed.map(describe).join("\\n\\n");
 show(0);
 </script>
 </body>
