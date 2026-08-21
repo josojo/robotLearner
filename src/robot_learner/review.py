@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -19,6 +20,7 @@ class ReviewArtifacts:
     html: Path
     data: Path
     videos: tuple[Path, ...]
+    notes: tuple[str, ...] = ()
 
 
 def write_review(run_dir: Path, *, encode: bool = False) -> ReviewArtifacts:
@@ -33,9 +35,11 @@ def write_review(run_dir: Path, *, encode: bool = False) -> ReviewArtifacts:
     html_path = run_dir / "review.html"
     html_path.write_text(_html(data), encoding="utf-8")
     videos: list[Path] = []
+    notes: list[str] = []
     if encode:
-        videos.extend(_encode_videos(run_dir, cameras, float(data["fps"])))
-    return ReviewArtifacts(html_path, data_path, tuple(videos))
+        encoded, notes = _encode_videos(run_dir, cameras, float(data["fps"]))
+        videos.extend(encoded)
+    return ReviewArtifacts(html_path, data_path, tuple(videos), tuple(notes))
 
 
 def collect_camera_frames(run_dir: Path) -> dict[str, list[Path]]:
@@ -149,42 +153,127 @@ def _checkpoints(run_dir: Path) -> list[dict[str, Any]]:
     return checkpoints
 
 
+def _find_ffmpeg() -> str | None:
+    found = shutil.which("ffmpeg")
+    if found:
+        return found
+    for candidate in (
+        Path("/opt/homebrew/bin/ffmpeg"),
+        Path("/usr/local/bin/ffmpeg"),
+        Path.home() / ".local" / "bin" / "ffmpeg",
+    ):
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return None
+
+
 def _encode_videos(
     run_dir: Path, cameras: dict[str, list[Path]], fps: float
-) -> list[Path]:
-    ffmpeg = shutil.which("ffmpeg")
-    if ffmpeg is None:
-        return []
+) -> tuple[list[Path], list[str]]:
     dest_dir = run_dir / "videos"
     dest_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
-    rate = f"{fps:g}"
+    notes: list[str] = []
+    ffmpeg = _find_ffmpeg()
     for camera, frames in cameras.items():
         dest = dest_dir / f"{camera}.mp4"
-        command = [
-            ffmpeg,
-            "-y",
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-framerate",
-            rate,
-            "-pattern_type",
-            "glob",
-            "-i",
-            str(frames[0].parent / "*.png"),
-            "-vf",
-            "pad=2*ceil(iw/2):2*ceil(ih/2)",
-            "-c:v",
-            "libx264",
-            "-pix_fmt",
-            "yuv420p",
-            str(dest),
-        ]
-        completed = subprocess.run(command, check=False, capture_output=True, text=True)
-        if completed.returncode == 0 and dest.is_file():
-            written.append(dest)
-    return written
+        if ffmpeg is not None:
+            error = _encode_ffmpeg(ffmpeg, frames, dest, fps)
+            if error is None and dest.is_file():
+                written.append(dest)
+                continue
+            if error:
+                notes.append(f"{camera}: ffmpeg failed ({error})")
+        fallback = _encode_pillow(frames, dest_dir / camera, fps)
+        if fallback is not None:
+            written.append(fallback)
+            if ffmpeg is None:
+                notes.append(f"{camera}: wrote {fallback.name} without ffmpeg")
+            continue
+        if ffmpeg is None:
+            notes.append(
+                f"{camera}: no ffmpeg on PATH and Pillow is unavailable for a GIF/WebP fallback"
+            )
+    return written, notes
+
+
+def _encode_ffmpeg(ffmpeg: str, frames: list[Path], dest: Path, fps: float) -> str | None:
+    """Concat demuxer is portable; macOS ffmpeg often lacks -pattern_type glob."""
+    duration = 1.0 / fps if fps > 0 else 0.08
+    listing = dest.with_suffix(".concat.txt")
+    lines = []
+    for frame in frames:
+        lines.append(f"file {json.dumps(str(frame.resolve()))}")
+        lines.append(f"duration {duration:.6f}")
+    lines.append(f"file {json.dumps(str(frames[-1].resolve()))}")
+    listing.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    command = [
+        ffmpeg,
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        str(listing),
+        "-vf",
+        "pad=2*ceil(iw/2):2*ceil(ih/2)",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        str(dest),
+    ]
+    completed = subprocess.run(command, check=False, capture_output=True, text=True)
+    listing.unlink(missing_ok=True)
+    if completed.returncode == 0 and dest.is_file() and dest.stat().st_size > 0:
+        return None
+    detail = (completed.stderr or completed.stdout or f"exit {completed.returncode}").strip()
+    return detail[:300] if detail else f"exit {completed.returncode}"
+
+
+def _encode_pillow(frames: list[Path], dest_stem: Path, fps: float) -> Path | None:
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    images = [Image.open(path).convert("RGBA") for path in frames]
+    try:
+        duration_ms = max(1, int(round(1000 / fps))) if fps > 0 else 80
+        first, rest = images[0], images[1:]
+        webp = dest_stem.with_suffix(".webp")
+        try:
+            first.save(
+                webp,
+                format="WEBP",
+                save_all=True,
+                append_images=rest,
+                duration=duration_ms,
+                loop=0,
+            )
+            if webp.is_file() and webp.stat().st_size > 0:
+                return webp
+        except (OSError, ValueError):
+            pass
+        gif = dest_stem.with_suffix(".gif")
+        first.save(
+            gif,
+            format="GIF",
+            save_all=True,
+            append_images=rest,
+            duration=duration_ms,
+            loop=0,
+            disposal=2,
+        )
+        if gif.is_file() and gif.stat().st_size > 0:
+            return gif
+        return None
+    finally:
+        for image in images:
+            image.close()
 
 
 def _html(data: dict[str, Any]) -> str:

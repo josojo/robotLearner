@@ -120,16 +120,18 @@ Each LLM call may return only one `sim.run_skill` from the host catalog.
 
 Observe frames and in-skill stride captures are stored as
 `frames/<camera>/00000000.png` under the run directory. After `explore` or
-`simulate`, `review.html` is written there. Open that file in a browser to
-scrub all cameras together, or encode MP4s:
+`simulate`, `review.html` is written there. The HTML player is the replay:
+open it in a browser to scrub all cameras together.
 
 ```bash
-uv run robot-learner review artifacts/simulation-runs/explore_a1614c55bbd6418790cb3a1f8dbcb3e6
-# or any other artifacts/simulation-runs/explore_* directory
+uv run robot-learner review artifacts/simulation-runs/explore_8ebdb612a4c74c818e4d7716766746ad
 ```
 
-That writes `review.html` plus `videos/<camera>.mp4` when `ffmpeg` is on
-`PATH`. `--open` launches the HTML player; `--no-video` skips encoding.
+That opens `review.html` and also writes `videos/<camera>.mp4` when `ffmpeg`
+is on `PATH` (Homebrew: `brew install ffmpeg`). macOS ffmpeg often lacks
+glob input, so encoding uses a concat list. If ffmpeg is missing, Pillow
+from the simulation extra writes an animated WebP/GIF instead.
+`--no-open` skips the browser; `--no-video` skips encoding.
 Failed skill attempts stay in the frame timeline, so you can see the
 motion that missed before a restore/retry.
 

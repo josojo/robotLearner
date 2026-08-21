@@ -59,6 +59,31 @@ def test_write_review_rejects_empty_run(tmp_path: Path) -> None:
         write_review(tmp_path)
 
 
+def test_encode_writes_video_when_possible(tmp_path: Path) -> None:
+    _write_png(tmp_path / "frames" / "work" / "00000000.png")
+    _write_png(tmp_path / "frames" / "work" / "00000001.png")
+    artifacts = write_review(tmp_path, encode=True)
+    if artifacts.videos:
+        assert artifacts.videos[0].is_file()
+        assert artifacts.videos[0].suffix in {".mp4", ".webp", ".gif"}
+    else:
+        assert artifacts.notes
+
+
+def test_encode_falls_back_when_ffmpeg_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("robot_learner.review._find_ffmpeg", lambda: None)
+    _write_png(tmp_path / "frames" / "work" / "00000000.png")
+    _write_png(tmp_path / "frames" / "work" / "00000001.png")
+    artifacts = write_review(tmp_path, encode=True)
+    assert artifacts.html.is_file()
+    if artifacts.videos:
+        assert artifacts.videos[0].suffix in {".webp", ".gif"}
+    else:
+        assert any("ffmpeg" in note for note in artifacts.notes)
+
+
 def test_review_cli_from_explore_run(tmp_path: Path) -> None:
     plan = tmp_path / "plan.json"
     plan.write_text(json.dumps(task_to_dict(_task("scene_ready"))) + "\n")

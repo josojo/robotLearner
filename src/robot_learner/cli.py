@@ -303,19 +303,22 @@ def _print_review(run_dir: Path, *, encode: bool = False) -> None:
         artifacts = write_review(run_dir, encode=encode)
     except ReviewError:
         return
-    print(f"Review: {artifacts.html}")
+    _report_review(artifacts)
+
+
+def _report_review(artifacts: Any) -> None:
+    print(f"Watch in a browser: {artifacts.html}")
     for video in artifacts.videos:
         print(f"Video: {video}")
+    for note in artifacts.notes:
+        print(f"Note: {note}")
 
 
 def run_review(run_dir: Path, *, encode: bool = True, open_browser: bool = False) -> int:
     artifacts = write_review(run_dir, encode=encode)
-    print(f"Review: {artifacts.html}")
-    if artifacts.videos:
-        for video in artifacts.videos:
-            print(f"Video: {video}")
-    elif encode:
-        print("Video: ffmpeg not available or encoding failed")
+    _report_review(artifacts)
+    if encode and not artifacts.videos:
+        print("Video: install ffmpeg (brew install ffmpeg) or the simulation extra for GIF/WebP")
     if open_browser:
         import webbrowser
 
@@ -382,13 +385,20 @@ def main() -> int:
     review.add_argument(
         "--no-video",
         action="store_true",
-        help="write review.html only, skip ffmpeg MP4s",
+        help="write review.html only, skip MP4/GIF/WebP encoding",
     )
     review.add_argument(
         "--open",
         action="store_true",
         dest="open_browser",
-        help="open review.html in a browser",
+        default=True,
+        help="open review.html in a browser (default)",
+    )
+    review.add_argument(
+        "--no-open",
+        action="store_false",
+        dest="open_browser",
+        help="do not open a browser",
     )
     args = parser.parse_args()
     if args.command == "demo":
