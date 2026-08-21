@@ -42,6 +42,15 @@ class SafetyValidator:
     @staticmethod
     def _validate_actions(strategy: Strategy) -> None:
         for action in strategy.actions:
+            if action.kind is ActionKind.RUN_SKILL:
+                name = action.parameters.get("name")
+                if not isinstance(name, str) or not name:
+                    raise SafetyViolation("run_skill requires a non-empty name")
+                parameters = action.parameters.get("parameters", {})
+                if parameters is None:
+                    parameters = {}
+                if not isinstance(parameters, dict):
+                    raise SafetyViolation("run_skill parameters must be an object")
             if action.kind is ActionKind.MOVE_CARTESIAN:
                 raw_speed = action.parameters.get("speed_m_s")
                 if not isinstance(raw_speed, int | float):

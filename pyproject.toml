@@ -14,13 +14,12 @@ dependencies = [
 [project.optional-dependencies]
 simulation = [
   "cableties-sim",
-  "gymnasium>=1.2,<2",
   "mujoco==3.8.0",
   "pillow>=10",
 ]
 
 [tool.uv.sources]
-cableties-sim = { git = "https://github.com/josojo/robo-wiki.git", rev = "7f6f8fe", subdirectory = "cableTies" }
+cableties-sim = { git = "https://github.com/josojo/robo-wiki.git", rev = "8f8fb56a36bf58b8ee051386b4fa58c6d2f40a68", subdirectory = "cableTies" }
 
 [project.scripts]
 robot-learner = "robot_learner.cli:main"

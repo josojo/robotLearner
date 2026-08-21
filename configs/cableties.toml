@@ -1,6 +1,6 @@
 [simulation]
 env_id = "CableTie-v0"
-registration_modules = ["cableties_sim"]
+host = "cableties_sim:CableTieHost"
 seed = 7
 worker_timeout_s = 300
 max_script_revisions = 3
@@ -11,5 +11,4 @@ capture_stride = 40
 render_backend = "osmesa"
 
 [simulation.env_kwargs]
-control_repeat = 1
 piper_asset_dir = "../robo-wiki/labTesting/assets/piper/assets"

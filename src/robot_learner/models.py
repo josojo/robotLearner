@@ -23,6 +23,7 @@ def utc_now() -> datetime:
 
 class ActionKind(StrEnum):
     OBSERVE = "observe"
+    RUN_SKILL = "run_skill"
     MOVE_CARTESIAN = "move_cartesian"
     GRASP = "grasp"
     RELEASE = "release"

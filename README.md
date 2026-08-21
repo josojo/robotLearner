@@ -44,42 +44,49 @@ explicitly a dry run; no hardware commands are issued.
 
 ## MuJoCo cable-tie simulation
 
-The sibling `../robo-wiki/cableTies` project is installed as the registered
-Gymnasium environment `CableTie-v0`. Robot Learner starts it in an isolated worker;
-live MuJoCo objects never cross the process boundary.
+The sibling `../robo-wiki/cableTies` project exposes `CableTieHost`: named
+skills, cameras, privileged state (tie poses, hole sites), and MuJoCo
+snapshots. Robot Learner talks to that host through `RobotAdapter` in an
+isolated worker. Live MuJoCo objects never cross the process boundary.
+Gymnasium is optional on the cell package and is not the integration API.
 
-Fetch the git-ignored PiPER meshes in the sibling checkout before first use, following
-`../robo-wiki/labTesting/scripts/fetch_piper_assets.sh`. The configured mesh directory
-is passed explicitly through `configs/cableties.toml`.
+Fetch the git-ignored PiPER meshes in the sibling checkout before first use,
+following `../robo-wiki/labTesting/scripts/fetch_piper_assets.sh`. Point
+`piper_asset_dir` at `.../piper/assets` (with `piper.xml` as a sibling).
+Paths in `configs/cableties.toml` are resolved relative to that file.
 
-Inspect the available cameras, sensors, and named skills:
+Inspect the host:
 
 ```bash
 uv sync --extra simulation --dev
 uv run robot-learner simulation-info --simulation-config configs/cableties.toml
 ```
 
-Restricted scripts may call only `sim.observe(...)`, `sim.run_skill(...)`, and
-`sim.stop()`. Execute one or more checkpoint sections in order:
+Explore by calling the adapter (observe / run a skill / snapshot), in argv
+order. A successful trace is compiled into a restricted script under the run
+directory (`explored.py`). Restricted scripts are the artifact, not the
+interaction medium:
+
+```bash
+uv run robot-learner simulate --simulation-config configs/cableties.toml \
+  --do observe \
+  --skill settle \
+  --do snapshot \
+  --skill identify_tie \
+  --do restore=1
+```
+
+Replay a saved script, or explore one checkpoint and persist the compiled
+camera-before / skill / camera-after script:
 
 ```bash
 uv run robot-learner simulate --simulation-config configs/cableties.toml \
   --section scene_ready=examples/scene_ready.py \
-  --section target_identified=examples/target_identified.py
-```
-
-For the common one-skill checkpoint case, Robot Learner can create the restricted
-camera-before/action/camera-after script itself before execution:
-
-```bash
-uv run robot-learner simulate --simulation-config configs/cableties.toml \
-  --checkpoint scene_ready=settle \
   --checkpoint target_identified=identify_tie
 ```
 
-The worker continuously captures the configured MuJoCo cameras while skills run and
-writes scripts, frames, the capability manifest, and results below
-`artifacts/simulation-runs/`.
+The worker captures configured cameras while skills run and writes scripts,
+frames, the capability manifest, and `run.json` below `artifacts/simulation-runs/`.
 
 ## Create checkpoints from a prompt
 
