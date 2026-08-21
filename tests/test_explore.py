@@ -116,6 +116,7 @@ def test_explorer_persists_observe_skill_observe_script(tmp_path: Path) -> None:
     assert "Camera frames attached" in prompt
     assert model.images[0]
     assert Path(model.images[0][0]).suffix == ".png"
+    assert report.checkpoints[0].start_frame is not None
 
 
 def test_explorer_rejects_unknown_skill_and_retries(tmp_path: Path) -> None:

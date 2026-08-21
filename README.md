@@ -116,6 +116,23 @@ uv run robot-learner explore --simulation-config configs/cableties.toml \
 `--plan` is the JSON written by `start` (or the bundled cable-tie example).
 Each LLM call may return only one `sim.run_skill` from the host catalog.
 
+## Rewatch a simulation run
+
+Observe frames and in-skill stride captures are stored as
+`frames/<camera>/00000000.png` under the run directory. After `explore` or
+`simulate`, `review.html` is written there. Open that file in a browser to
+scrub all cameras together, or encode MP4s:
+
+```bash
+uv run robot-learner review artifacts/simulation-runs/explore_a1614c55bbd6418790cb3a1f8dbcb3e6
+# or any other artifacts/simulation-runs/explore_* directory
+```
+
+That writes `review.html` plus `videos/<camera>.mp4` when `ffmpeg` is on
+`PATH`. `--open` launches the HTML player; `--no-video` skips encoding.
+Failed skill attempts stay in the frame timeline, so you can see the
+motion that missed before a restore/retry.
+
 ## Create checkpoints from a prompt
 
 With `OPENROUTER_API_KEY` configured, start a task with a natural-language prompt:

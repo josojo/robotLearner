@@ -19,6 +19,7 @@ from robot_learner.models import Action, ActionKind, Checkpoint, Predicate, Stra
 from robot_learner.openrouter import OpenRouterLanguageModel
 from robot_learner.planning import CheckpointPlanner, PlanError, task_from_dict, task_to_dict
 from robot_learner.ports import LanguageModel
+from robot_learner.review import ReviewError, write_review
 from robot_learner.safety import SafetyValidator
 from robot_learner.simulation import (
     GeneratedScript,
@@ -223,6 +224,7 @@ def run_simulation(config_path: Path, argv: list[str], output: Path | None) -> i
         (run_dir / "run.json").write_text(
             json.dumps(records, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
+        _print_review(run_dir)
         print(f"Run: {run_dir}")
     return 1 if failed else 0
 
@@ -292,7 +294,33 @@ def run_explore(
                 json.dumps(report.to_dict(), indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
+        _print_review(run_dir)
         print(f"Run: {run_dir}")
+
+
+def _print_review(run_dir: Path, *, encode: bool = False) -> None:
+    try:
+        artifacts = write_review(run_dir, encode=encode)
+    except ReviewError:
+        return
+    print(f"Review: {artifacts.html}")
+    for video in artifacts.videos:
+        print(f"Video: {video}")
+
+
+def run_review(run_dir: Path, *, encode: bool = True, open_browser: bool = False) -> int:
+    artifacts = write_review(run_dir, encode=encode)
+    print(f"Review: {artifacts.html}")
+    if artifacts.videos:
+        for video in artifacts.videos:
+            print(f"Video: {video}")
+    elif encode:
+        print("Video: ffmpeg not available or encoding failed")
+    if open_browser:
+        import webbrowser
+
+        webbrowser.open(artifacts.html.resolve().as_uri())
+    return 0
 
 
 def main() -> int:
@@ -346,6 +374,22 @@ def main() -> int:
     )
     explore.add_argument("--plan", type=Path, required=True, help="task JSON from `start`")
     explore.add_argument("--output", type=Path, help="simulation artifact directory")
+    review = subparsers.add_parser(
+        "review",
+        help="build a watchable replay from captured simulation frames",
+    )
+    review.add_argument("run_dir", type=Path, help="simulation run directory")
+    review.add_argument(
+        "--no-video",
+        action="store_true",
+        help="write review.html only, skip ffmpeg MP4s",
+    )
+    review.add_argument(
+        "--open",
+        action="store_true",
+        dest="open_browser",
+        help="open review.html in a browser",
+    )
     args = parser.parse_args()
     if args.command == "demo":
         return run_demo(args.config)
@@ -362,6 +406,7 @@ def main() -> int:
         ScriptValidationError,
         ExplorationError,
         PlanError,
+        ReviewError,
         EOFError,
     )
     if args.command == "simulation-info":
@@ -377,6 +422,13 @@ def main() -> int:
     if args.command == "explore":
         try:
             return run_explore(args.simulation_config, args.plan, args.output)
+        except sim_errors as exc:
+            parser.error(str(exc))
+    if args.command == "review":
+        try:
+            return run_review(
+                args.run_dir, encode=not args.no_video, open_browser=args.open_browser
+            )
         except sim_errors as exc:
             parser.error(str(exc))
     return 2

@@ -66,6 +66,8 @@ class CheckpointExploration:
     skill: str | None
     script_path: str | None
     attempts: tuple[CheckpointAttempt, ...]
+    start_frame: int | None = None
+    end_frame: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +88,8 @@ class ExplorationReport:
                     "ok": item.ok,
                     "skill": item.skill,
                     "script_path": item.script_path,
+                    "start_frame": item.start_frame,
+                    "end_frame": item.end_frame,
                     "attempts": [
                         {
                             "revision": attempt.revision,
@@ -135,6 +139,8 @@ class SimulationExplorer:
         completed: list[tuple[Checkpoint, str]],
     ) -> CheckpointExploration:
         before = self._simulation.observe()
+        start_frame = _frame_index(before)
+        end_frame = start_frame
         snapshot_id = self._simulation.snapshot()
         attempts: list[CheckpointAttempt] = []
         revisions = max(1, int(self._simulation.spec.max_script_revisions))
@@ -185,6 +191,7 @@ class SimulationExplorer:
                 )
                 continue
             after = self._simulation.observe()
+            end_frame = _frame_index(after) or end_frame
             failure = _failure_reason(result, after)
             if failure is None:
                 compiled = script_from_actions(
@@ -208,6 +215,8 @@ class SimulationExplorer:
                     skill=str(command.arguments["name"]),
                     script_path=str(path),
                     attempts=tuple(attempts),
+                    start_frame=start_frame,
+                    end_frame=end_frame,
                 )
             self._simulation.restore(snapshot_id)
             before = self._simulation.observe()
@@ -226,10 +235,20 @@ class SimulationExplorer:
             skill=None,
             script_path=None,
             attempts=tuple(attempts),
+            start_frame=start_frame,
+            end_frame=end_frame,
         )
 
 
 _IMAGE_SUFFIXES = {".gif", ".jpeg", ".jpg", ".png", ".webp"}
+
+
+def _frame_index(observation: Observation) -> int | None:
+    for ref in observation.artifact_refs:
+        stem = Path(str(ref)).stem
+        if stem.isdigit():
+            return int(stem)
+    return None
 
 
 def observation_image_paths(observation: Observation) -> tuple[str, ...]:
