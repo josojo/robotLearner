@@ -1,6 +1,8 @@
 """Observable orchestration of one checkpoint transition."""
 
+from collections.abc import Sequence
 from dataclasses import replace
+from pathlib import Path
 
 from robot_learner.executor import StrategyExecutor
 from robot_learner.models import (
@@ -33,7 +35,13 @@ class LearningHarness:
         self._recorder = recorder
         self._language_model = language_model
 
-    def consult_model(self, prompt: str, *, system_prompt: str | None = None) -> str:
+    def consult_model(
+        self,
+        prompt: str,
+        *,
+        system_prompt: str | None = None,
+        images: Sequence[str | Path] | None = None,
+    ) -> str:
         """Send a deliberation request through the configured model provider.
 
         Model output remains advisory: callers must translate it into the typed action DSL and
@@ -41,7 +49,9 @@ class LearningHarness:
         """
         if self._language_model is None:
             raise RuntimeError("no language model is configured")
-        return self._language_model.complete(prompt, system_prompt=system_prompt)
+        return self._language_model.complete(
+            prompt, system_prompt=system_prompt, images=images
+        )
 
     def run_checkpoint(
         self,

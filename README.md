@@ -35,9 +35,10 @@ Alternatively, copy `.env.example` to `.env`. The `start` command loads that fil
 automatically without overriding variables already exported by your shell.
 
 Then attach it with `OpenRouterLanguageModel.from_env()` and call
-`harness.consult_model(...)`. Responses are advisory only: model text is never sent
-directly to hardware and must still be converted to the restricted action DSL and pass
-safety validation.
+`harness.consult_model(...)`. `complete(..., images=[...])` attaches local PNG/JPEG
+files as OpenRouter image-understanding parts. Responses are advisory only: model
+text is never sent directly to hardware and must still be converted to the
+restricted action DSL and pass safety validation.
 
 The demo writes JSON traces beneath `artifacts/traces/`. Its robot connection is
 explicitly a dry run; no hardware commands are issued.
@@ -91,6 +92,52 @@ uv run robot-learner simulate --simulation-config configs/cableties.toml \
 
 The worker captures configured cameras while skills run and writes scripts,
 frames, the capability manifest, and `run.json` below `artifacts/simulation-runs/`.
+
+## Generate checkpoint scripts with the explorer
+
+`explore` walks a checkpoint plan on one long-lived simulation client. For each
+checkpoint it observes privileged state (ties, hole, TCP, phase) and the
+configured camera PNGs, asks the language model which catalog
+`sim.run_skill(...)` to run, parses the reply with `parse_restricted_script`,
+executes that skill, and on failure restores the pre-checkpoint snapshot and
+retries up to `max_script_revisions`. Successful transitions are written as
+`scripts/<checkpoint>/v1.py`.
+
+The OpenRouter wrapper sends those observe frames as image-understanding
+input (`image_url` data URLs). Use a multimodal `OPENROUTER_MODEL`. The
+wrapper does not request image generation.
+
+```bash
+export OPENROUTER_API_KEY="sk-or-v1-..."
+uv run robot-learner explore --simulation-config configs/cableties.toml \
+  --plan examples/cabletie_plan.json
+uv run robot-learner explore --simulation-config configs/cableties.toml \
+  --plan examples/cabletie_plan.json --seed 11
+```
+
+`--plan` is the JSON written by `start` (or the bundled cable-tie example).
+Each LLM call may return only one `sim.run_skill` from the host catalog.
+`--seed` overrides `simulation.seed` in the TOML (default `7`) so the tie
+layout is resampled.
+
+## Rewatch a simulation run
+
+Observe frames and in-skill stride captures are stored as
+`frames/<camera>/00000000.png` under the run directory. After `explore` or
+`simulate`, `review.html` is written there. The HTML player is the replay:
+open it in a browser to scrub all cameras together.
+
+```bash
+uv run robot-learner review artifacts/simulation-runs/explore_8ebdb612a4c74c818e4d7716766746ad
+```
+
+That opens `review.html` and also writes `videos/<camera>.mp4` when `ffmpeg`
+is on `PATH` (Homebrew: `brew install ffmpeg`). macOS ffmpeg often lacks
+glob input, so encoding uses a concat list. If ffmpeg is missing, Pillow
+from the simulation extra writes an animated WebP/GIF instead.
+`--no-open` skips the browser; `--no-video` skips encoding.
+Failed skill attempts stay in the frame timeline, so you can see the
+motion that missed before a restore/retry.
 
 ## Create checkpoints from a prompt
 

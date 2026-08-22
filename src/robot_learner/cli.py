@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -12,10 +14,13 @@ from dotenv import load_dotenv
 
 from robot_learner.config import load_settings
 from robot_learner.executor import DryRunRobot
+from robot_learner.explore import ExplorationError, SimulationExplorer
 from robot_learner.harness import LearningHarness
 from robot_learner.models import Action, ActionKind, Checkpoint, Predicate, Strategy, Task
 from robot_learner.openrouter import OpenRouterLanguageModel
-from robot_learner.planning import CheckpointPlanner, PlanError, task_to_dict
+from robot_learner.planning import CheckpointPlanner, PlanError, task_from_dict, task_to_dict
+from robot_learner.ports import LanguageModel
+from robot_learner.review import ReviewError, write_review
 from robot_learner.safety import SafetyValidator
 from robot_learner.simulation import (
     GeneratedScript,
@@ -220,6 +225,7 @@ def run_simulation(config_path: Path, argv: list[str], output: Path | None) -> i
         (run_dir / "run.json").write_text(
             json.dumps(records, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
+        _print_review(run_dir)
         print(f"Run: {run_dir}")
     return 1 if failed else 0
 
@@ -239,6 +245,98 @@ def _script_failed(result: dict[str, Any]) -> bool:
     if result.get("state", {}).get("unstable"):
         return True
     return any(not row.get("ok", True) for row in result.get("results", []))
+
+
+def load_plan(path: Path) -> Task:
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise PlanError(f"plan is not valid JSON: {exc.msg}") from exc
+    if not isinstance(raw, dict):
+        raise PlanError("plan must be a JSON object")
+    return task_from_dict(raw)
+
+
+def run_explore(
+    simulation_config: Path,
+    plan_path: Path,
+    output: Path | None,
+    *,
+    seed: int | None = None,
+    language_model: LanguageModel | None = None,
+    worker: Callable[..., None] | None = None,
+) -> int:
+    from robot_learner.models import new_id
+
+    load_dotenv(Path.cwd() / ".env")
+    spec = SimulationSpec.from_toml(simulation_config)
+    if seed is not None:
+        spec = replace(spec, seed=seed)
+    task = load_plan(plan_path)
+    run_dir = output or Path("artifacts") / "simulation-runs" / new_id("explore")
+    run_dir.mkdir(parents=True, exist_ok=True)
+    model = language_model or OpenRouterLanguageModel.from_env()
+    report = None
+    simulation: SimulationClient | None = None
+    try:
+        simulation = SimulationClient(spec, run_dir, worker=worker)
+        (run_dir / "manifest.json").write_text(
+            json.dumps(simulation.manifest, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        print(f"Seed: {spec.seed}")
+        report = SimulationExplorer(simulation, model).explore(task)
+        for item in report.checkpoints:
+            if item.ok:
+                print(f"{item.checkpoint_id}: PASS ({item.skill})")
+                continue
+            detail = item.error or "no successful skill"
+            print(f"{item.checkpoint_id}: FAIL ({detail})")
+            for attempt in item.attempts:
+                mark = "ok" if attempt.ok else "fail"
+                skill = attempt.skill or "unparsed"
+                error = f" -> {attempt.error}" if attempt.error else ""
+                print(f"  attempt {attempt.revision} {mark}: {skill}{error}")
+        return 0 if report.ok else 1
+    finally:
+        if simulation is not None:
+            simulation.close()
+        if report is not None:
+            (run_dir / "explore.json").write_text(
+                json.dumps(report.to_dict(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+        _print_review(run_dir)
+        print(f"Details: {run_dir / 'explore.json'}")
+        print(f"Run: {run_dir}")
+
+
+def _print_review(run_dir: Path, *, encode: bool = False) -> None:
+    try:
+        artifacts = write_review(run_dir, encode=encode)
+    except ReviewError:
+        return
+    _report_review(artifacts)
+
+
+def _report_review(artifacts: Any) -> None:
+    print(f"Watch in a browser: {artifacts.html}")
+    for video in artifacts.videos:
+        print(f"Video: {video}")
+    for note in artifacts.notes:
+        print(f"Note: {note}")
+
+
+def run_review(run_dir: Path, *, encode: bool = True, open_browser: bool = False) -> int:
+    artifacts = write_review(run_dir, encode=encode)
+    _report_review(artifacts)
+    if encode and not artifacts.videos:
+        print("Video: install ffmpeg (brew install ffmpeg) or the simulation extra for GIF/WebP")
+    if open_browser:
+        import webbrowser
+
+        webbrowser.open(artifacts.html.resolve().as_uri())
+    return 0
 
 
 def main() -> int:
@@ -283,6 +381,43 @@ def main() -> int:
         help="explore CHECKPOINT_ID=SKILL and persist the compiled script",
     )
     simulate.add_argument("--output", type=Path, help="simulation artifact directory")
+    explore = subparsers.add_parser(
+        "explore",
+        help="walk a checkpoint plan and persist one restricted script per checkpoint",
+    )
+    explore.add_argument(
+        "--simulation-config", type=Path, default=Path("configs/cableties.toml")
+    )
+    explore.add_argument("--plan", type=Path, required=True, help="task JSON from `start`")
+    explore.add_argument(
+        "--seed",
+        type=int,
+        help="override simulation.seed from the config (tie layout / scene sample)",
+    )
+    explore.add_argument("--output", type=Path, help="simulation artifact directory")
+    review = subparsers.add_parser(
+        "review",
+        help="build a watchable replay from captured simulation frames",
+    )
+    review.add_argument("run_dir", type=Path, help="simulation run directory")
+    review.add_argument(
+        "--no-video",
+        action="store_true",
+        help="write review.html only, skip MP4/GIF/WebP encoding",
+    )
+    review.add_argument(
+        "--open",
+        action="store_true",
+        dest="open_browser",
+        default=True,
+        help="open review.html in a browser (default)",
+    )
+    review.add_argument(
+        "--no-open",
+        action="store_false",
+        dest="open_browser",
+        help="do not open a browser",
+    )
     args = parser.parse_args()
     if args.command == "demo":
         return run_demo(args.config)
@@ -297,6 +432,9 @@ def main() -> int:
         RuntimeError,
         SimulationError,
         ScriptValidationError,
+        ExplorationError,
+        PlanError,
+        ReviewError,
         EOFError,
     )
     if args.command == "simulation-info":
@@ -307,6 +445,20 @@ def main() -> int:
     if args.command == "simulate":
         try:
             return run_simulation(args.simulation_config, sys.argv[1:], args.output)
+        except sim_errors as exc:
+            parser.error(str(exc))
+    if args.command == "explore":
+        try:
+            return run_explore(
+                args.simulation_config, args.plan, args.output, seed=args.seed
+            )
+        except sim_errors as exc:
+            parser.error(str(exc))
+    if args.command == "review":
+        try:
+            return run_review(
+                args.run_dir, encode=not args.no_video, open_browser=args.open_browser
+            )
         except sim_errors as exc:
             parser.error(str(exc))
     return 2

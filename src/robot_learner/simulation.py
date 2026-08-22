@@ -489,6 +489,7 @@ def _spec_from_worker_payload(raw_spec: dict[str, Any]) -> SimulationSpec:
 
 def _worker_main(connection: Connection, raw_spec: dict[str, Any], artifact_dir: str) -> None:
     host: Any = None
+    index_file = None
     try:
         spec = _spec_from_worker_payload(raw_spec)
         apply_render_backend(spec.render_backend)
@@ -515,15 +516,19 @@ def _worker_main(connection: Connection, raw_spec: dict[str, Any], artifact_dir:
         frames_dir.mkdir(parents=True, exist_ok=True)
         frame_index = 0
         stride_log: list[dict[str, Any]] = []
+        index_file = (frames_dir / "index.jsonl").open("a", encoding="utf-8")
 
         def capture(phase: str, selected: tuple[str, ...]) -> list[dict[str, Any]]:
             nonlocal frame_index
             results = []
+            files: dict[str, str] = {}
             for camera in selected:
                 rgb = host.render_camera(camera)
                 destination = frames_dir / camera / f"{frame_index:08d}.png"
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 Image.fromarray(rgb).save(destination)
+                relative = destination.relative_to(root).as_posix()
+                files[camera] = relative
                 results.append(
                     {
                         "camera": camera,
@@ -534,6 +539,18 @@ def _worker_main(connection: Connection, raw_spec: dict[str, Any], artifact_dir:
                         "artifact_ref": str(destination),
                     }
                 )
+            index_file.write(
+                json.dumps(
+                    {
+                        "index": frame_index,
+                        "simulation_time": float(host.data.time),
+                        "phase": phase,
+                        "files": files,
+                    }
+                )
+                + "\n"
+            )
+            index_file.flush()
             frame_index += 1
             return results
 
@@ -560,6 +577,7 @@ def _worker_main(connection: Connection, raw_spec: dict[str, Any], artifact_dir:
                 "configured_cameras": list(cameras),
                 "seed": spec.seed,
                 "max_script_revisions": spec.max_script_revisions,
+                "capture_stride": spec.capture_stride,
                 "initial_state": _jsonable(host.privileged_state()),
             }
         )
@@ -695,6 +713,9 @@ def _worker_main(connection: Connection, raw_spec: dict[str, Any], artifact_dir:
         if host is not None:
             with contextlib.suppress(Exception):
                 host.close()
+        if index_file is not None:
+            with contextlib.suppress(OSError):
+                index_file.close()
         with contextlib.suppress(OSError):
             connection.close()
 

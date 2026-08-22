@@ -1,6 +1,7 @@
 """Extension interfaces for hardware and intelligence providers."""
 
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Protocol
 
 from robot_learner.models import (
@@ -30,7 +31,13 @@ class Verifier(Protocol):
 class LanguageModel(Protocol):
     """A narrow text-generation boundary used by the orchestration harness."""
 
-    def complete(self, prompt: str, *, system_prompt: str | None = None) -> str: ...
+    def complete(
+        self,
+        prompt: str,
+        *,
+        system_prompt: str | None = None,
+        images: Sequence[str | Path] | None = None,
+    ) -> str: ...
 
 
 class StrategyRepository(Protocol):

@@ -1,0 +1,115 @@
+{
+  "id": "task_cabletie_zip",
+  "goal": "Identify a suitable cable tie, pick it up, seat it in the holder, lock the holder, zip the tie closed, then place the zipped tie on the finished pad.",
+  "constraints": [
+    "Use only named cable-tie skills.",
+    "Stop if the scene becomes unstable."
+  ],
+  "input_refs": [],
+  "checkpoints": [
+    {
+      "id": "scene_ready",
+      "name": "Scene settled",
+      "success_predicate": {"name": "holder_unlocked", "parameters": {}},
+      "dependencies": [],
+      "recovery_options": ["settle again"],
+      "fallback": "stop_for_human_review"
+    },
+    {
+      "id": "target_identified",
+      "name": "Suitable cable tie identified",
+      "success_predicate": {"name": "current_tie_set", "parameters": {}},
+      "dependencies": ["scene_ready"],
+      "recovery_options": ["identify another unused tie"],
+      "fallback": "stop_for_human_review"
+    },
+    {
+      "id": "pregrasp",
+      "name": "Pre-grasp above the tie",
+      "success_predicate": {"name": "gripper_above_tie", "parameters": {}},
+      "dependencies": ["target_identified"],
+      "recovery_options": ["discard and identify another tie"],
+      "fallback": "stop_for_human_review"
+    },
+    {
+      "id": "tie_grasped",
+      "name": "Cable-tie head grasped",
+      "success_predicate": {"name": "tie_held", "parameters": {}},
+      "dependencies": ["pregrasp"],
+      "recovery_options": ["release and regrasp"],
+      "fallback": "stop_for_human_review"
+    },
+    {
+      "id": "tie_lifted",
+      "name": "Cable tie lifted",
+      "success_predicate": {"name": "object_lifted", "parameters": {"object": "tie"}},
+      "dependencies": ["tie_grasped"],
+      "recovery_options": ["return to table and regrasp"],
+      "fallback": "stop_for_human_review"
+    },
+    {
+      "id": "over_holder",
+      "name": "Over the holder",
+      "success_predicate": {"name": "held_tie_above_holder", "parameters": {}},
+      "dependencies": ["tie_lifted"],
+      "recovery_options": ["retract and reapproach the holder"],
+      "fallback": "stop_for_human_review"
+    },
+    {
+      "id": "seated_in_holder",
+      "name": "Head seated in the holder",
+      "success_predicate": {"name": "head_near_holder", "parameters": {}},
+      "dependencies": ["over_holder"],
+      "recovery_options": ["lift out and reseat"],
+      "fallback": "stop_for_human_review"
+    },
+    {
+      "id": "holder_locked",
+      "name": "Holder locked",
+      "success_predicate": {"name": "holder_locked", "parameters": {}},
+      "dependencies": ["seated_in_holder"],
+      "recovery_options": ["unlock, reseat, lock again"],
+      "fallback": "stop_for_human_review"
+    },
+    {
+      "id": "tail_grasped",
+      "name": "Tail grasped",
+      "success_predicate": {"name": "tail_near_tcp", "parameters": {}},
+      "dependencies": ["holder_locked"],
+      "recovery_options": ["regrasp the tail tab"],
+      "fallback": "stop_for_human_review"
+    },
+    {
+      "id": "tie_zipped",
+      "name": "Cable tie zipped",
+      "success_predicate": {"name": "zip_closed", "parameters": {}},
+      "dependencies": ["tail_grasped"],
+      "recovery_options": ["discard the current tie"],
+      "fallback": "stop_for_human_review"
+    },
+    {
+      "id": "holder_unlocked",
+      "name": "Holder unlocked",
+      "success_predicate": {"name": "holder_unlocked", "parameters": {}},
+      "dependencies": ["tie_zipped"],
+      "recovery_options": ["press the unlock button again"],
+      "fallback": "stop_for_human_review"
+    },
+    {
+      "id": "zipped_lifted",
+      "name": "Zipped tie lifted",
+      "success_predicate": {"name": "object_lifted", "parameters": {"object": "tie"}},
+      "dependencies": ["holder_unlocked"],
+      "recovery_options": ["regrasp the zipped tie"],
+      "fallback": "stop_for_human_review"
+    },
+    {
+      "id": "zipped_placed",
+      "name": "Zipped tie placed",
+      "success_predicate": {"name": "object_seated", "parameters": {"object": "tie", "station": "pad"}},
+      "dependencies": ["zipped_lifted"],
+      "recovery_options": ["regrasp and place on the pad"],
+      "fallback": "stop_for_human_review"
+    }
+  ]
+}

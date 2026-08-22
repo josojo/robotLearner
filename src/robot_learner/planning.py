@@ -152,6 +152,37 @@ def _is_json_value(value: object) -> bool:
     return True
 
 
+def task_from_dict(raw: Mapping[str, Any]) -> Task:
+    """Load a task artifact written by `task_to_dict`."""
+    if not isinstance(raw, Mapping):
+        raise PlanError("task must be a JSON object")
+    task_id = raw.get("id")
+    if not isinstance(task_id, str) or not task_id.strip():
+        raise PlanError("task needs a non-empty id")
+    goal = raw.get("goal")
+    if not isinstance(goal, str) or not goal.strip():
+        raise PlanError("task needs a non-empty goal")
+    constraints = _optional_strings(raw.get("constraints", ()), "constraints")
+    input_refs = _optional_strings(raw.get("input_refs", ()), "input_refs")
+    return Task(
+        id=task_id.strip(),
+        goal=goal.strip(),
+        checkpoints=_parse_checkpoints(raw),
+        constraints=constraints,
+        input_refs=input_refs,
+    )
+
+
+def _optional_strings(value: object, key: str) -> tuple[str, ...]:
+    if value in (None, (), []):
+        return ()
+    if not isinstance(value, (list, tuple)) or not all(
+        isinstance(item, str) and item.strip() for item in value
+    ):
+        raise PlanError(f"task {key} must be a list of strings")
+    return tuple(item.strip() for item in value)
+
+
 def task_to_dict(task: Task) -> dict[str, JSONValue]:
     """Convert a generated task into its stable artifact representation."""
     return {

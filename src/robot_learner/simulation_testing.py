@@ -7,6 +7,12 @@ from multiprocessing.connection import Connection
 from pathlib import Path
 from typing import Any
 
+# 1x1 RGBA PNG so observe() can feed the vision explorer without PIL.
+MIN_PNG = bytes.fromhex(
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
+    "0000000d49444154789c63f8cfc0f01f00050001ff89993d1d0000000049454e44ae426082"
+)
+
 
 def fake_worker_main(connection: Connection, raw_spec: dict[str, Any], artifact_dir: str) -> None:
     """Speak the simulation worker protocol without MuJoCo or PIL."""
@@ -37,8 +43,8 @@ def fake_worker_main(connection: Connection, raw_spec: dict[str, Any], artifact_
 
     def capture() -> list[dict[str, Any]]:
         nonlocal frame_index
-        destination = frames_dir / f"{frame_index:08d}.txt"
-        destination.write_text(f"{phase}\n", encoding="utf-8")
+        destination = frames_dir / f"{frame_index:08d}.png"
+        destination.write_bytes(MIN_PNG)
         frame_index += 1
         return [
             {
@@ -82,8 +88,14 @@ def fake_worker_main(connection: Connection, raw_spec: dict[str, Any], artifact_
                 "manifest": {
                     "provider": "fake",
                     "environment_id": raw_spec.get("env_id", "Fake-v0"),
+                    "seed": raw_spec.get("seed"),
                     "cameras": ["work", "wrist"],
-                    "skills": {"settle": {"parameters": {}}, "fail": {"parameters": {}}},
+                    "skills": {
+                        "settle": {"parameters": {}},
+                        "identify_tie": {"parameters": {"idx": "integer|null"}},
+                        "fail": {"parameters": {}},
+                        "break": {"parameters": {}},
+                    },
                     "sensors": ["arm_qpos"],
                 },
             }
